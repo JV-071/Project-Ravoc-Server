@@ -3080,6 +3080,11 @@ Storage = {
 				CourtWarlockKilled = 48046,
 				Reward = 48047,
 				Certificate = 48048,
+				-- next free numbers after the U15_24 range (48049 - 48090)
+				Corpses = 48091, -- bitmask of the 3 burned corpses (1, 2, 4)
+				Harlan = 48092, -- optional: Supplies for the Steadfast
+				Demeron = 48093, -- optional: Emmanuelle's Boat Repair
+				KingsCouncil = 48094, -- optional: King's Council (Kesar)
 			},
 		},
 		U15_24 = { -- update 15.24 - Reserved Storages 48049 - 48090 (Targuna Quest)

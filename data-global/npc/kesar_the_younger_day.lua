@@ -64,43 +64,93 @@ local TWENTY_HOURS = 20 * 60 * 60
 local function creatureSayCallback(npc, creature, type, message)
 	local player = Player(creature)
 	local playerId = player:getId()
-	local stag = Storage.Quest.U15_20.TheOrderOfTheStag
-	local stagQuest = player:getStorageValue(stag.Questline)
 
-	if MsgContains(message, "help") or MsgContains(message, "stag") or MsgContains(message, "eldoran") then
-		if player:getStorageValue(Storage.Quest.U12_40.TheOrderOfTheLion.KesarMission) < 5 then
-			npcHandler:say("First, Bounac must be freed from the siege before I can burden you with another family matter.", npc, creature)
+	-- The Order of the Stag (W: Transcripts "Etzel Writ" and "Isle of Ada"; Optional 3: King's Council)
+	if OrderOfTheStag.lionDone(player) then
+		local stagStage = OrderOfTheStag.getStage(player)
+		local Stage = OrderOfTheStag.Stage
+
+		if MsgContains(message, "problem") and stagStage < Stage.WRIT then
+			npcHandler:say({
+				"I have sent a party of my best men on a mission to a certain island to... investigate a royal matter. However, they have yet to send news from their quest. ...",
+				"Hero of {Bounac} and royal advisor of the court, I am in need of your {help} once again.",
+			}, npc, creature)
 			return true
 		end
-		if stagQuest < 1 then
-			npcHandler:say("There are whispers of a forgotten fourth heir and an Order of the Stag. Will you investigate an old frozen trophy in the castle for proof?", npc, creature)
-			npcHandler:setTopic(playerId, 50)
-			return true
-		elseif stagQuest == 2 then
-			if player:getItemCount(52586) < 1 then
-				npcHandler:say("Return when you have recovered the certificate hidden beneath the frozen trophy.", npc, creature)
-				return true
-			end
-			npcHandler:say("This certificate proves Eldoran's ancestry. Will you sail to the Isle of Ada and find him?", npc, creature)
-			npcHandler:setTopic(playerId, 51)
-			return true
-		elseif stagQuest == 11 then
-			if player:getStorageValue(stag.Reward) == 1 then
-				npcHandler:say("The Order of the Stag will not be forgotten again.", npc, creature)
-				return true
-			end
-			player:addItem(52828, 1)
-			player:addOutfitAddon(1436, 2)
-			player:addOutfitAddon(1437, 2)
-			player:addAchievement("King's Council")
-			player:setStorageValue(stag.Reward, 1)
-			player:setStorageValue(stag.Questline, 12)
-			npcHandler:say("Eldoran lives and his order stands. Accept this brass-shod chest and the insignia of a Royal Bounacean Advisor. You have earned a place in the King's Council.", npc, creature)
-			return true
-		else
-			npcHandler:say("Follow the trail of the Order of the Stag and return when you bring news of Eldoran.", npc, creature)
+
+		if MsgContains(message, "banner") then
+			npcHandler:say("Strong, resilient and completely trustworthy. Currently out on an expedition, it's been a while, actually...", npc, creature)
 			return true
 		end
+
+		if MsgContains(message, "help") then
+			if stagStage < Stage.WRIT then
+				OrderOfTheStag.setStage(player, Stage.WRIT)
+				npcHandler:say({
+					"My knights embarked on the Emmanuelle, our flagship. They were to set sail for the Isle of Ada to retrieve word from an old order of... knights, residing there. ...",
+					"There is, however, another twist to this tale, I fear I cannot keep from you. A long kept Bounacean secret is about to be lifted, all in due time. ...",
+					"There is a room below the cathedral that was once the stage for quite the spectacle. By decree a guard was to be garrisoned there at all times, day as well as night, an armed magic wielder. ...",
+					"The room was locked from the inside and there was no other direct access. All of this to protect a single chest. Its... precarious content was subject of several attacks, in hope to destabilise the then still struggling Bounaceans and their leader. ...",
+					"During one of these attacks, a hired magician found a way to enter the room. The warlock down there managed to subdue the perpetrator but had to seal the room... and ultimately himself from the inside. ...",
+					"The shift was never changed again, the room was kept unbreached until this day. The chest houses a writ that was quite important for Kesar Etzel, my ancestor. And it still is to the Etzels, in this case: me. ...",
+					"I will not tell you what is written there but I want you to retrieve it and bring it to me. You will have to find a way from the sacred halls directly above it.",
+				}, npc, creature)
+				return true
+			end
+
+			if stagStage == Stage.WRIT then
+				-- NOT CONFIRMED: reminder while the writ has not been brought
+				npcHandler:say("The writ is still sealed below the cathedral. Find a way down from the sacred halls directly above it.", npc, creature)
+				return true
+			end
+
+			if stagStage == Stage.CERTIFICATE then
+				npcHandler:say({
+					"Now that you know our family secret, I want you to take the writ with you and show it to Captain {Banner}, leader of this expedition. ...",
+					"The Isle of Ada is uncharted and difficult to reach. Either you have a very strong ship or a very nimble boat. ...",
+					"Since the port of Bounac is still in quite the turmoil, find a boat to the south near the old fisherman's hut. Say no word to anyone besides the captain and make utmost haste. Are you prepared?",
+				}, npc, creature)
+				npcHandler:setTopic(playerId, 10)
+				return true
+			end
+
+			if stagStage >= Stage.DONE then
+				if player:getStorageValue(Storage.Quest.U15_20.TheOrderOfTheStag.KingsCouncil) < 1 then
+					player:setStorageValue(Storage.Quest.U15_20.TheOrderOfTheStag.KingsCouncil, 1)
+					player:addOutfitAddon(1436, 2)
+					player:addOutfitAddon(1437, 2)
+					if not player:hasAchievement("King's Council") then
+						player:addAchievement("King's Council")
+					end
+					player:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
+					-- NOT CONFIRMED: the Wiki only says that Kesar gives the achievement and addon 2
+					npcHandler:say("You have done Bounac and the Etzels a service that will not be forgotten. From this day on, you have a permanent place at my council.", npc, creature)
+				else
+					npcHandler:say("Your place at my council is secure, advisor.", npc, creature)
+				end
+				return true
+			end
+
+			-- NOT CONFIRMED: reminder during the journey
+			npcHandler:say("Find Captain Banner on the Isle of Ada, state the purpose of your mission, which is to support them as well as the Stags and bring word of the expedition.", npc, creature)
+			return true
+		end
+
+		if message:lower() == "yes" and npcHandler:getTopic(playerId) == 10 then
+			npcHandler:setTopic(playerId, 0)
+			if stagStage == Stage.CERTIFICATE then
+				OrderOfTheStag.setStage(player, Stage.TO_ADA)
+				npcHandler:say("Then make it so. Find Captain Banner on the Isle of Ada, state the purpose of your mission, which is to support them as well as the Stags and bring word of the expedition.", npc, creature)
+			end
+			return true
+		end
+	end
+
+	-- Without The Order of the Lion finished, Kesar does not talk about The Order of the Stag (W: requirement).
+	-- Text NOT CONFIRMED (the Wiki has no transcript of the refusal); added so he does not stay silent.
+	if not OrderOfTheStag.lionDone(player) and (MsgContains(message, "problem") or MsgContains(message, "help")) then
+		npcHandler:say("Talk to me again once you have proven yourself to Bounac.", npc, creature)
+		return true
 	end
 
 	if MsgContains(message, "siege") then
@@ -207,18 +257,6 @@ local function creatureSayCallback(npc, creature, type, message)
 	end
 
 	if message:lower() == "yes" then
-		if npcHandler:getTopic(playerId) == 50 and stagQuest < 1 then
-			player:setStorageValue(stag.Questline, 1)
-			npcHandler:say("Take a frozen starlight to the old trophy stand at 32402, 32467, 4. Its cold light should expose what lies beneath.", npc, creature)
-			npcHandler:setTopic(playerId, 0)
-			return true
-		end
-		if npcHandler:getTopic(playerId) == 51 and stagQuest == 2 then
-			player:setStorageValue(stag.Questline, 3)
-			npcHandler:say("Use the small vessel south of Bounac at 32397, 32512, 7. Show the certificate to Second in Command Demeron on Ada.", npc, creature)
-			npcHandler:setTopic(playerId, 0)
-			return true
-		end
 		local mission = player:getStorageValue(Storage.Quest.U12_40.TheOrderOfTheLion.KesarMission)
 
 		if npcHandler:getTopic(playerId) == 1 and mission == 1 then
