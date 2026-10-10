@@ -177,6 +177,10 @@ end
 local fishing = Action()
 
 function fishing.onUse(player, item, fromPosition, target, toPosition, isHotkey)
+	-- No Rest for the Wicked: rod used on Arbaziloth (scripts/quests/no_rest_for_the_wicked/arbaziloth_fight.lua)
+	if target and target.isCreature and target:isCreature() and ArbazilothFight and ArbazilothFight.onRod(player, item, target) then
+		return true
+	end
 	if not target then
 		return false
 	end

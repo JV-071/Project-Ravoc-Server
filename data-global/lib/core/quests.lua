@@ -6868,8 +6868,12 @@ if not Quests then
 					missionId = 10602,
 					startValue = 1,
 					endValue = 3,
+					-- only HARD mode victories count (W); counter in arbaziloth_death.lua
 					states = {
-						[1] = "Defeat the Arbaziloth 10 times to access The Doomforge reward room.",
+						[1] = function(player)
+							local kills = NoRestForTheWicked and NoRestForTheWicked.getHardKills(player) or 0
+							return string.format("Defeat Arbaziloth in his full power, sparing The Forgemaster, 10 times to access the Doomforge reward room. (%d/10)", math.min(kills, 10))
+						end,
 						[2] = "Speak with The Forgemaster and ask about the 'key'.",
 						[3] = "You have defeated Arbaziloth 10 times and got your reward at The Doomforge.",
 					},
