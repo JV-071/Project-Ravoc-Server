@@ -1,0 +1,132 @@
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277: foram encontrados conflitos entre diferentes versões do "WindowsBase" que não puderam ser resolvidas. [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277: Há um conflito entre "WindowsBase, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" e "WindowsBase, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35". [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:     "WindowsBase, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" foi escolhido porque era principal e "WindowsBase, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" não era. [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:     As referências dependerão de "WindowsBase, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" [C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\WindowsBase.dll]. [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:         C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\WindowsBase.dll [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:           Inclusões de itens do arquivo de projeto que geraram a referência"C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref\net10.0\WindowsBase.dll". [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:             C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.10\ref/net10.0/WindowsBase.dll [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:     Referências que dependem de ou foram unificadas para "WindowsBase, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" []. [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:         D:\OTSERV\crystalserver-main\Assets-Editor-main\release-win-x64\Assets Editor.dll [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:           Inclusões de itens do arquivo de projeto que geraram a referência"D:\OTSERV\crystalserver-main\Assets-Editor-main\release-win-x64\Assets Editor.dll". [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:             Assets Editor [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:         D:\OTSERV\crystalserver-main\Assets-Editor-main\release-win-x64\MaterialDesignThemes.Wpf.dll [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:           Inclusões de itens do arquivo de projeto que geraram a referência"D:\OTSERV\crystalserver-main\Assets-Editor-main\release-win-x64\MaterialDesignThemes.Wpf.dll". [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:             Assets Editor [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:         D:\OTSERV\crystalserver-main\Assets-Editor-main\release-win-x64\Xceed.Wpf.Toolkit.NET5.dll [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:           Inclusões de itens do arquivo de projeto que geraram a referência"D:\OTSERV\crystalserver-main\Assets-Editor-main\release-win-x64\Xceed.Wpf.Toolkit.NET5.dll". [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:             Assets Editor [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:         D:\OTSERV\crystalserver-main\Assets-Editor-main\release-win-x64\ICSharpCode.AvalonEdit.dll [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:           Inclusões de itens do arquivo de projeto que geraram a referência"D:\OTSERV\crystalserver-main\Assets-Editor-main\release-win-x64\ICSharpCode.AvalonEdit.dll". [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:             Assets Editor [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:         D:\OTSERV\crystalserver-main\Assets-Editor-main\release-win-x64\Microsoft.Xaml.Behaviors.dll [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:           Inclusões de itens do arquivo de projeto que geraram a referência"D:\OTSERV\crystalserver-main\Assets-Editor-main\release-win-x64\Microsoft.Xaml.Behaviors.dll". [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+C:\Program Files\dotnet\sdk\10.0.302\Microsoft.Common.CurrentVersion.targets(2453,5): warning MSB3277:             Assets Editor [D:\OTSERV\crystalserver-main\crystalserver-main\summer-update-base\tools\aec-inspect\aec-inspect.csproj]
+1975		groups=2
+1976		groups=2
+1977		groups=2
+1978		groups=2
+4000		groups=1
+4001		groups=2
+4002		groups=2
+4003		groups=2
+4004		groups=2
+4005		groups=2
+4006		groups=2
+4007		groups=2
+4008		groups=2
+4009		groups=2
+4010		groups=2
+4011		groups=2
+4012		groups=2
+4013		groups=2
+4014		groups=2
+4015		groups=2
+4016		groups=2
+4017		groups=2
+4018		groups=2
+4019		groups=2
+4020		groups=2
+4021		groups=2
+4022		groups=2
+4023		groups=2
+4024		groups=2
+4025		groups=2
+4026		groups=2
+4027		groups=2
+4028		groups=2
+4029		groups=1
+4030		groups=1
+4031		groups=1
+4032		groups=1
+4033		groups=1
+4034		groups=1
+4035		groups=1
+4036		groups=1
+4037		groups=1
+4038		groups=1
+4039		groups=1
+4040		groups=2
+4041		groups=2
+4042		groups=2
+4043		groups=1
+4044		groups=1
+4045		groups=1
+4046		groups=2
+4047		groups=2
+4048		groups=2
+4049		groups=2
+4050		groups=2
+4051		groups=2
+4052		groups=2
+4053		groups=2
+4054		groups=2
+4055		groups=2
+4056		groups=2
+4057		groups=2
+4058		groups=2
+4059		groups=2
+4060		groups=2
+4061		groups=2
+4062		groups=1
+4063		groups=1
+4064		groups=1
+4065	nightmare dreams	groups=2
+4066		groups=2
+4067		groups=2
+4068		groups=2
+4069		groups=2
+4070	shadow spirit	groups=2
+4071		groups=2
+4072		groups=2
+4073		groups=2
+4074		groups=2
+4075		groups=2
+4076		groups=2
+4077		groups=2
+4078		groups=2
+4079		groups=2
+4080		groups=2
+4081		groups=2
+4082		groups=2
+4083		groups=2
+4084		groups=2
+4085		groups=2
+4086		groups=2
+4087		groups=2
+4088		groups=2
+4089		groups=2
+4090		groups=2
+4091		groups=2
+4092		groups=2
+4093		groups=2
+4094		groups=2
+4095		groups=2
+4096		groups=2
+4097		groups=2
+4098		groups=2
+4099		groups=2
+4100		groups=2
+4101		groups=2
+4102		groups=2
+4103		groups=2
+4104		groups=2

@@ -1,0 +1,202 @@
+name: Build - Windows - CMake
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "vcpkg.json"
+      - "data/**"
+      - "data-global/**"
+      - "config.lua.dist"
+      - "schema.sql"
+      - ".github/workflows/build-windows-cmake.yml"
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "src/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "vcpkg.json"
+      - "data/**"
+      - "data-global/**"
+      - "config.lua.dist"
+      - "schema.sql"
+      - ".github/workflows/build-windows-cmake.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 2
+  MAKEFLAGS: "-j 2"
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/.vcpkg-binary-cache,readwrite"
+
+jobs:
+  build:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    name: windows-2022-release
+    runs-on: windows-2022
+
+    concurrency:
+      group: crystalserver-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read vcpkg baseline
+        id: vcpkg
+        shell: pwsh
+        run: |
+          $json = Get-Content vcpkg.json -Raw | ConvertFrom-Json
+          $commit = $json.'builtin-baseline'
+          if ($commit -notmatch '^[0-9a-f]{40}$') {
+            Write-Error "vcpkg builtin-baseline must be a full 40-character commit SHA."
+            exit 1
+          }
+          "commit=$commit" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Compute dependency cache key
+        id: deps
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash vcpkg.json -Algorithm SHA256).Hash
+          "hash=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Cache vcpkg artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.vcpkg-binary-cache
+            ${{ github.workspace }}/build/windows-release/vcpkg_installed
+            ${{ github.workspace }}/vcpkg/buildtrees
+            ${{ github.workspace }}/vcpkg/downloads
+            ${{ github.workspace }}/vcpkg/packages
+          key: crystalserver-vcpkg-windows-v2-${{ steps.deps.outputs.hash }}
+          restore-keys: |
+            crystalserver-vcpkg-windows-v2-
+
+      - name: Compiler cache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          max-size: "1G"
+          variant: "sccache"
+          key: crystalserver-windows-release
+
+      - name: Remove pre-installed MySQL
+        shell: pwsh
+        run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "C:/mysql*"
+
+      - name: Install vcpkg
+        uses: lukka/run-vcpkg@a400452f634fe49e9f18d388aeb1809dcc642136
+        with:
+          vcpkgGitCommitId: ${{ steps.vcpkg.outputs.commit }}
+
+      - name: Install CMake and Ninja
+        uses: lukka/get-cmake@v3.31.6
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Prepare dependency cache
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\.vcpkg-binary-cache" | Out-Null
+
+      - name: Configure and build
+        id: compile
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $log = "$env:GITHUB_WORKSPACE\windows-build.log"
+          cmake --preset windows-release *>&1 | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build --preset windows-release *>&1 | Tee-Object -FilePath $log -Append
+          exit $LASTEXITCODE
+
+      - name: Upload build diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: CrystalServer-windows-build-log
+          path: |
+            ${{ github.workspace }}/windows-build.log
+            ${{ github.workspace }}/build/windows-release/vcpkg-manifest-install.log
+            ${{ github.workspace }}/vcpkg/buildtrees/**/*.log
+          if-no-files-found: ignore
+
+      - name: Stop after build failure
+        if: ${{ steps.compile.outcome == 'failure' }}
+        shell: pwsh
+        run: |
+          Get-Content "$env:GITHUB_WORKSPACE\windows-build.log" -Tail 120
+          Write-Error "Windows build failed. Download CrystalServer-windows-build-log for details."
+          exit 1
+
+      - name: Prepare runnable server package
+        shell: pwsh
+        run: |
+          $artifactDir = "$env:GITHUB_WORKSPACE\artifacts"
+          New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
+
+          $exePath = Get-ChildItem "$env:GITHUB_WORKSPACE\build\windows-release" -Recurse -File -Filter "crystalserver.exe" |
+            Where-Object { $_.FullName -notmatch 'vcpkg|test' } |
+            Select-Object -First 1
+          if (-not $exePath) {
+            Write-Error "The compiled crystalserver.exe was not found."
+            exit 1
+          }
+          Copy-Item $exePath.FullName "$artifactDir\crystalserver.exe"
+
+          Get-ChildItem $exePath.Directory.FullName -Filter "*.dll" -ErrorAction SilentlyContinue |
+            Copy-Item -Destination $artifactDir
+
+          foreach ($item in @("data", "data-global", "config.lua.dist", "schema.sql")) {
+            $source = Join-Path $env:GITHUB_WORKSPACE $item
+            if (Test-Path $source) {
+              Copy-Item $source -Destination $artifactDir -Recurse -Force
+            }
+          }
+
+      - name: Upload runnable server
+        uses: actions/upload-artifact@v4
+        with:
+          name: CrystalServer-windows-release
+          path: ${{ github.workspace }}/artifacts
+
+  release:
+    name: Publish latest release
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download server artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: CrystalServer-windows-release
+          path: artifacts
+
+      - name: Create ZIP
+        run: cd artifacts && zip -r ../CrystalServer-windows.zip .
+
+      - name: Publish latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest -R "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release create latest CrystalServer-windows.zip \
+            -R "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Latest server build ($(date -u +%Y-%m-%d), ${GITHUB_SHA::7})" \
+            --notes "Automatic Windows build of the latest main commit ${GITHUB_SHA::7}. Includes crystalserver.exe and tracked runtime data. Copy config.lua.dist to config.lua and configure your database before starting."

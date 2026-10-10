@@ -1,0 +1,637 @@
+////////////////////////////////////////////////////////////////////////
+// Crystal Server - an opensource roleplaying game
+////////////////////////////////////////////////////////////////////////
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+////////////////////////////////////////////////////////////////////////
+
+#include "database/database.hpp"
+
+#include "config/configmanager.hpp"
+#include "lib/di/container.hpp"
+#include "lib/metrics/metrics.hpp"
+#include "utils/tools.hpp"
+#include <ctime>
+
+thread_local Database::DBConnection* Database::tls_pinnedConnection = nullptr;
+
+Database::~Database() {
+	for (auto &conn : connections) {
+		if (conn && conn->handle) {
+			mysql_close(conn->handle);
+		}
+	}
+}
+
+Database &Database::getInstance() {
+	return inject<Database>();
+}
+
+bool Database::connect() {
+	uint32_t poolSize = g_configManager().getNumber(MYSQL_POOL_SIZE);
+	if (poolSize < 1) {
+		poolSize = 1;
+	}
+	if (poolSize > 32) {
+		poolSize = 32;
+	}
+	return connect(&g_configManager().getString(MYSQL_HOST), &g_configManager().getString(MYSQL_USER), &g_configManager().getString(MYSQL_PASS), &g_configManager().getString(MYSQL_DB), g_configManager().getNumber(SQL_PORT), &g_configManager().getString(MYSQL_SOCK), poolSize);
+}
+
+bool Database::connect(const std::string* host, const std::string* user, const std::string* password, const std::string* database, uint32_t port, const std::string* sock, uint32_t poolSize) {
+	if (host->empty() || user->empty() || password->empty() || database->empty() || port <= 0) {
+		g_logger().warn("MySQL host, user, password, database or port not provided");
+	}
+
+	// Close any existing connections
+	for (auto &conn : connections) {
+		if (conn && conn->handle) {
+			mysql_close(conn->handle);
+			conn->handle = nullptr;
+		}
+	}
+	connections.clear();
+
+	// automatic reconnect
+	bool reconnect = true;
+	bool ssl_enabled = false;
+
+	if (poolSize < 1) {
+		poolSize = 1;
+	}
+	if (poolSize > 32) {
+		poolSize = 32;
+	}
+
+	connections.reserve(poolSize);
+	for (uint32_t i = 0; i < poolSize; ++i) {
+		auto conn = std::make_unique<DBConnection>();
+
+		conn->handle = mysql_init(nullptr);
+		if (!conn->handle) {
+			g_logger().error("Failed to initialize MySQL connection handle (pool index {}).", i);
+			return false;
+		}
+
+		mysql_options(conn->handle, MYSQL_OPT_RECONNECT, &reconnect);
+		mysql_options(conn->handle, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, &ssl_enabled);
+
+		if (!mysql_real_connect(conn->handle, host->c_str(), user->c_str(), password->c_str(), database->c_str(), port, sock->c_str(), 0)) {
+			g_logger().error("MySQL Error Message (pool index {}): {}", i, mysql_error(conn->handle));
+			return false;
+		}
+
+		connections.push_back(std::move(conn));
+	}
+
+	// Query max_allowed_packet from the first connection
+	DBResult_ptr result = storeQuery("SHOW VARIABLES LIKE 'max_allowed_packet'");
+	if (result) {
+		maxPacketSize = result->getNumber<uint64_t>("Value");
+	}
+
+	g_logger().info("MySQL connection pool initialized with {} connection(s).", poolSize);
+	return true;
+}
+
+void Database::createDatabaseBackup(bool compress) const {
+	if (!g_configManager().getBoolean(MYSQL_DB_BACKUP)) {
+		return;
+	}
+	// Get current time for formatting
+	auto now = std::chrono::system_clock::now();
+	std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+	std::tm tm_buf {};
+#if defined(_WIN32) || defined(_WIN64)
+	localtime_s(&tm_buf, &now_c);
+#else
+	localtime_r(&now_c, &tm_buf);
+#endif
+	char date_buf[16];
+	std::strftime(date_buf, sizeof(date_buf), "%Y-%m-%d", &tm_buf);
+	char time_buf[16];
+	std::strftime(time_buf, sizeof(time_buf), "%H-%M-%S", &tm_buf);
+	std::string formattedDate = date_buf;
+	std::string formattedTime = time_buf;
+	// Create a backup directory based on the current date
+	std::string backupDir = fmt::format("database_backup/{}/", formattedDate);
+	std::filesystem::create_directories(backupDir);
+	std::string backupFileName = fmt::format("{}backup_{}.sql", backupDir, formattedTime);
+	// Create a temporary configuration file for MySQL credentials
+	std::string tempConfigFile = "database_backup.cnf";
+	std::ofstream configFile(tempConfigFile);
+	if (configFile.is_open()) {
+		configFile << "[client]\n";
+		configFile << "user=\"" << g_configManager().getString(MYSQL_USER) << "\"\n";
+		configFile << "password=\"" << g_configManager().getString(MYSQL_PASS) << "\"\n";
+		configFile << "host=" << g_configManager().getString(MYSQL_HOST) << "\n";
+		configFile << "port=" << g_configManager().getNumber(SQL_PORT) << "\n";
+		configFile.close();
+	} else {
+		g_logger().error("Failed to create temporary MySQL configuration file.");
+		return;
+	}
+	// Execute mysqldump command to create backup file
+	std::string command = fmt::format(
+		"mysqldump --defaults-extra-file={} {} > {}",
+		tempConfigFile, g_configManager().getString(MYSQL_DB), backupFileName
+	);
+	int result = std::system(command.c_str());
+	std::filesystem::remove(tempConfigFile);
+	if (result != 0) {
+		g_logger().error("Failed to create database backup using mysqldump.");
+		return;
+	}
+	// Compress the backup file if requested
+	std::string compressedFileName;
+	compressedFileName = backupFileName + ".gz";
+	gzFile gzFile = gzopen(compressedFileName.c_str(), "wb9");
+	if (!gzFile) {
+		g_logger().error("Failed to open gzip file for compression.");
+		return;
+	}
+	std::ifstream backupFile(backupFileName, std::ios::binary);
+	if (!backupFile.is_open()) {
+		g_logger().error("Failed to open backup file for compression: {}", backupFileName);
+		gzclose(gzFile);
+		return;
+	}
+	std::string buffer(8192, '\0');
+	while (backupFile.read(&buffer[0], buffer.size()) || backupFile.gcount() > 0) {
+		gzwrite(gzFile, buffer.data(), backupFile.gcount());
+	}
+	backupFile.close();
+	gzclose(gzFile);
+	std::filesystem::remove(backupFileName);
+	g_logger().info("Database backup successfully compressed to: {}", compressedFileName);
+	// Delete backups older than 7 days
+	auto nowTime = std::chrono::system_clock::now();
+	auto sevenDaysAgo = nowTime - std::chrono::hours(7 * 24); // 7 days in hours
+	for (const auto &entry : std::filesystem::directory_iterator("database_backup")) {
+		if (entry.is_directory()) {
+			try {
+				for (const auto &file : std::filesystem::directory_iterator(entry)) {
+					if (file.path().extension() == ".gz") {
+						auto fileTime = std::filesystem::last_write_time(file);
+						auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(fileTime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+
+						if (sctp < sevenDaysAgo) {
+							std::filesystem::remove(file);
+							g_logger().info("Deleted old backup file: {}", file.path().string());
+						}
+					}
+				}
+			} catch (const std::filesystem::filesystem_error &e) {
+				g_logger().error("Failed to check or delete files in backup directory: {}. Error: {}", entry.path().string(), e.what());
+			}
+		}
+	}
+}
+
+Database::DBConnection* Database::getConnection() {
+	if (tls_pinnedConnection) {
+		return tls_pinnedConnection;
+	}
+
+	if (connections.empty()) {
+		g_logger().error("[Database::getConnection] Connection pool is empty - database not connected?");
+		return nullptr;
+	}
+
+	size_t count = connections.size();
+	size_t idx = nextIndex.fetch_add(1, std::memory_order_relaxed) % count;
+	auto &conn = connections[idx];
+	conn->mutex.lock();
+	return conn.get();
+}
+
+void Database::putConnection(DBConnection* conn) {
+	if (tls_pinnedConnection != conn) {
+		conn->mutex.unlock();
+	}
+}
+
+bool Database::beginTransaction() {
+	DBConnection* conn = getConnection();
+	if (!conn) {
+		return false;
+	}
+
+	if (mysql_query(conn->handle, "BEGIN") != 0) {
+		g_logger().error("MySQL Error Message: {}", mysql_error(conn->handle));
+		putConnection(conn);
+		return false;
+	}
+
+	tls_pinnedConnection = conn;
+	return true;
+}
+
+bool Database::rollback() {
+	if (!tls_pinnedConnection) {
+		g_logger().error("No active transaction to rollback!");
+		return false;
+	}
+
+	if (!tls_pinnedConnection->handle) {
+		g_logger().error("Database not initialized!");
+		tls_pinnedConnection = nullptr;
+		return false;
+	}
+
+	if (mysql_rollback(tls_pinnedConnection->handle) != 0) {
+		g_logger().error("Message: {}", mysql_error(tls_pinnedConnection->handle));
+		DBConnection* conn = tls_pinnedConnection;
+		tls_pinnedConnection = nullptr;
+		putConnection(conn);
+		return false;
+	}
+
+	DBConnection* conn = tls_pinnedConnection;
+	tls_pinnedConnection = nullptr;
+	putConnection(conn);
+	return true;
+}
+
+bool Database::commit() {
+	if (!tls_pinnedConnection) {
+		g_logger().error("No active transaction to commit!");
+		return false;
+	}
+
+	if (!tls_pinnedConnection->handle) {
+		g_logger().error("Database not initialized!");
+		tls_pinnedConnection = nullptr;
+		return false;
+	}
+
+	if (mysql_commit(tls_pinnedConnection->handle) != 0) {
+		g_logger().error("Message: {}", mysql_error(tls_pinnedConnection->handle));
+		DBConnection* conn = tls_pinnedConnection;
+		tls_pinnedConnection = nullptr;
+		putConnection(conn);
+		return false;
+	}
+
+	DBConnection* conn = tls_pinnedConnection;
+	tls_pinnedConnection = nullptr;
+	putConnection(conn);
+	return true;
+}
+
+bool Database::isRecoverableError(unsigned int error) {
+	return error == CR_SERVER_LOST || error == CR_SERVER_GONE_ERROR || error == CR_CONN_HOST_ERROR || error == 1053 /*ER_SERVER_SHUTDOWN*/ || error == CR_CONNECTION_ERROR;
+}
+
+bool Database::retryQuery(MYSQL* handle, std::string_view query, int retries) {
+	while (retries > 0 && mysql_query(handle, query.data()) != 0) {
+		g_logger().error("Query: {}", query.substr(0, 256));
+		g_logger().error("MySQL error [{}]: {}", mysql_errno(handle), mysql_error(handle));
+		if (!isRecoverableError(mysql_errno(handle))) {
+			return false;
+		}
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+		retries--;
+	}
+	if (retries == 0) {
+		g_logger().error("Query {} failed after {} retries.", query, 10);
+		return false;
+	}
+
+	return true;
+}
+
+bool Database::executeQuery(std::string_view query) {
+	DBConnection* conn = getConnection();
+	if (!conn) {
+		return false;
+	}
+
+	if (!conn->handle) {
+		g_logger().error("Database not initialized!");
+		putConnection(conn);
+		return false;
+	}
+
+	g_logger().trace("Executing Query: {}", query);
+
+	metrics::query_latency measure(query.substr(0, 50));
+	bool success = retryQuery(conn->handle, query, 10);
+	mysql_free_result(mysql_store_result(conn->handle));
+	measure.stop();
+
+	putConnection(conn);
+	return success;
+}
+
+DBResult_ptr Database::storeQuery(std::string_view query) {
+	DBConnection* conn = getConnection();
+	if (!conn) {
+		return nullptr;
+	}
+
+	if (!conn->handle) {
+		g_logger().error("Database not initialized!");
+		putConnection(conn);
+		return nullptr;
+	}
+
+	g_logger().trace("Storing Query: {}", query);
+
+	metrics::query_latency measure(query.substr(0, 50));
+retry:
+	if (mysql_query(conn->handle, query.data()) != 0) {
+		g_logger().error("Query: {}", query);
+		g_logger().error("Message: {}", mysql_error(conn->handle));
+		if (!isRecoverableError(mysql_errno(conn->handle))) {
+			measure.stop();
+			putConnection(conn);
+			return nullptr;
+		}
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+		goto retry;
+	}
+
+	// Retrieving results of query
+	MYSQL_RES* res = mysql_store_result(conn->handle);
+	measure.stop();
+	putConnection(conn);
+
+	if (res != nullptr) {
+		DBResult_ptr result = std::make_shared<DBResult>(res);
+		if (!result->hasNext()) {
+			return nullptr;
+		}
+		return result;
+	}
+	return nullptr;
+}
+
+std::string Database::escapeString(const std::string &s) {
+	std::string::size_type len = s.length();
+	auto length = static_cast<uint32_t>(len);
+	std::string escaped = escapeBlob(s.c_str(), length);
+	if (escaped.empty()) {
+		g_logger().warn("Error escaping string");
+	}
+	return escaped;
+}
+
+std::string Database::escapeBlob(const char* s, uint32_t length) {
+	DBConnection* conn = getConnection();
+	if (!conn) {
+		return "''";
+	}
+
+	if (!conn->handle) {
+		g_logger().error("Database not initialized!");
+		putConnection(conn);
+		return "''";
+	}
+
+	size_t maxLength = (length * 2) + 1;
+
+	std::string escaped;
+	escaped.reserve(maxLength + 2);
+	escaped.push_back('\'');
+
+	if (length != 0) {
+		std::string output(maxLength, '\0');
+		size_t escapedLength = mysql_real_escape_string(conn->handle, &output[0], s, length);
+		output.resize(escapedLength);
+		escaped.append(output);
+	}
+
+	escaped.push_back('\'');
+
+	putConnection(conn);
+	return escaped;
+}
+
+uint64_t Database::getLastInsertId() {
+	DBConnection* conn = tls_pinnedConnection;
+	bool borrowed = false;
+	if (!conn) {
+		conn = getConnection();
+		borrowed = true;
+	}
+	if (!conn) {
+		return 0;
+	}
+
+	uint64_t id = static_cast<uint64_t>(mysql_insert_id(conn->handle));
+	if (id == 0) {
+		g_logger().warn("[Database::getLastInsertId] LAST_INSERT_ID is 0 — caller likely ran INSERT on a different connection than this one. Use insertAndGetId() to be safe.");
+	}
+	if (borrowed) {
+		putConnection(conn);
+	}
+	return id;
+}
+
+uint64_t Database::insertAndGetId(std::string_view query) {
+	if (query.empty()) {
+		return 0;
+	}
+
+	DBConnection* conn = getConnection();
+	if (!conn) {
+		return 0;
+	}
+
+	uint64_t insertedId = 0;
+
+	// Run the INSERT first (using the existing execute path for retry/error handling).
+	metrics::query_latency measure(query.substr(0, 50));
+	if (!retryQuery(conn->handle, query, 10)) {
+		measure.stop();
+		putConnection(conn);
+		return 0;
+	}
+	mysql_free_result(mysql_store_result(conn->handle));
+
+	// Same connection, same session — mysql_insert_id() is reliable here.
+	insertedId = static_cast<uint64_t>(mysql_insert_id(conn->handle));
+	measure.stop();
+
+	putConnection(conn);
+	return insertedId;
+}
+
+DBResult::DBResult(MYSQL_RES* res) {
+	handle = res;
+
+	int num_fields = mysql_num_fields(handle);
+
+	const MYSQL_FIELD* fields = mysql_fetch_fields(handle);
+	for (size_t i = 0; i < num_fields; i++) {
+		listNames[fields[i].name] = i;
+	}
+	row = mysql_fetch_row(handle);
+}
+
+DBResult::~DBResult() {
+	mysql_free_result(handle);
+}
+
+std::string DBResult::getString(const std::string &s) const {
+	auto it = listNames.find(s);
+	if (it == listNames.end()) {
+		g_logger().error("Column '{}' does not exist in result set", s);
+		return {};
+	}
+	if (row[it->second] == nullptr) {
+		return {};
+	}
+	return std::string(row[it->second]);
+}
+
+const char* DBResult::getStream(const std::string &s, unsigned long &size) const {
+	auto it = listNames.find(s);
+	if (it == listNames.end()) {
+		g_logger().error("Column '{}' doesn't exist in the result set", s);
+		size = 0;
+		return nullptr;
+	}
+
+	if (row[it->second] == nullptr) {
+		size = 0;
+		return nullptr;
+	}
+
+	size = mysql_fetch_lengths(handle)[it->second];
+	return row[it->second];
+}
+
+uint8_t DBResult::getU8FromString(const std::string &string, const std::string &function) {
+	int v = std::atoi(string.c_str());
+	if (v < 0 || v > std::numeric_limits<uint8_t>::max()) {
+		g_logger().error("[{}] Failed to get number value {} for tier table result, on function call: {}", __FUNCTION__, v, function);
+		return 0;
+	}
+	return static_cast<uint8_t>(v);
+}
+
+int8_t DBResult::getInt8FromString(const std::string &string, const std::string &function) {
+	int v = std::atoi(string.c_str());
+	if (v < std::numeric_limits<int8_t>::min() || v > std::numeric_limits<int8_t>::max()) {
+		g_logger().error("[{}] Failed to get number value {} for tier table result, on function call: {}", __FUNCTION__, v, function);
+		return 0;
+	}
+	return static_cast<int8_t>(v);
+}
+
+size_t DBResult::countResults() const {
+	return static_cast<size_t>(mysql_num_rows(handle));
+}
+
+bool DBResult::hasNext() const {
+	return row != nullptr;
+}
+
+bool DBResult::next() {
+	if (!handle) {
+		g_logger().error("Database not initialized!");
+		return false;
+	}
+	row = mysql_fetch_row(handle);
+	return row != nullptr;
+}
+
+DBInsert::DBInsert(std::string insertQuery) :
+	query(std::move(insertQuery)) {
+	this->length = this->query.length();
+}
+
+bool DBInsert::addRow(std::string_view row) {
+	const size_t rowLength = row.length();
+	length += rowLength;
+	auto max_packet_size = Database::getInstance().getMaxPacketSize();
+
+	if (length > max_packet_size && !execute()) {
+		return false;
+	}
+
+	if (values.empty()) {
+		values.reserve(rowLength + 2);
+		values.push_back('(');
+		values.append(row);
+		values.push_back(')');
+	} else {
+		values.reserve(values.length() + rowLength + 3);
+		values.push_back(',');
+		values.push_back('(');
+		values.append(row);
+		values.push_back(')');
+	}
+	return true;
+}
+
+bool DBInsert::addRow(std::ostringstream &row) {
+	bool ret = addRow(row.str());
+	row.str(std::string());
+	return ret;
+}
+
+void DBInsert::upsert(const std::vector<std::string> &columns) {
+	upsertColumns = columns;
+}
+
+bool DBInsert::execute() {
+	if (values.empty()) {
+		return true;
+	}
+
+	std::string baseQuery = this->query;
+	std::string upsertQuery;
+
+	if (!upsertColumns.empty()) {
+		std::ostringstream upsertStream;
+		upsertStream << " ON DUPLICATE KEY UPDATE ";
+		for (size_t i = 0; i < upsertColumns.size(); ++i) {
+			upsertStream << "`" << upsertColumns[i] << "` = VALUES(`" << upsertColumns[i] << "`)";
+			if (i < upsertColumns.size() - 1) {
+				upsertStream << ", ";
+			}
+		}
+		upsertQuery = upsertStream.str();
+	}
+
+	std::string currentBatch = values;
+	while (!currentBatch.empty()) {
+		size_t cutPos = Database::MAX_QUERY_SIZE - baseQuery.size() - upsertQuery.size();
+		if (cutPos < currentBatch.size()) {
+			cutPos = currentBatch.rfind("),(", cutPos);
+			if (cutPos == std::string::npos) {
+				return false;
+			}
+			cutPos += 2;
+		} else {
+			cutPos = currentBatch.size();
+		}
+
+		std::string batchValues = currentBatch.substr(0, cutPos);
+		if (batchValues.back() == ',') {
+			batchValues.pop_back();
+		}
+		currentBatch = currentBatch.substr(cutPos);
+
+		std::ostringstream query;
+		query << baseQuery << " " << batchValues << upsertQuery;
+		if (!Database::getInstance().executeQuery(query.str())) {
+			return false;
+		}
+	}
+
+	return true;
+}
