@@ -1,0 +1,7 @@
+{
+  "url": "https://github.com/s2leandro155/crystalserver1530ot/blob/bced5fcc/schema.sql",
+  "git_blob": "ff340045c3223521355e99afc3bc950bf9557dc1",
+  "sha256": "85ef89c6bc30c6e053cc97e980d2fc2523b4af9ff285c5a96bfc784cec619356",
+  "bytes": 41179,
+  "reason": "Restore schema omitted by root SQL ignore rule; matches the credited base commit"
+}
