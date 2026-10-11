@@ -1,0 +1,32 @@
+name: Lua syntax
+on:
+  push:
+    branches: [main, 'validation/linux']
+    paths: ['**/*.lua', 'ci/CheckLuaSyntax.py', '.github/workflows/lua-syntax.yml']
+  pull_request:
+    paths: ['**/*.lua', 'ci/CheckLuaSyntax.py', '.github/workflows/lua-syntax.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  syntax:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install LuaJIT
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y luajit
+      - name: Compile Lua files without execution
+        run: |
+          mkdir -p build/diagnostics
+          set -o pipefail
+          python3 ci/CheckLuaSyntax.py 2>&1 | tee build/diagnostics/lua-syntax.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lua-syntax-diagnostics
+          path: build/diagnostics/lua-syntax.log
+          retention-days: 14
