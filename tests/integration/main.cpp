@@ -158,7 +158,6 @@ int main() {
 		acc.accountType = AccountType::ACCOUNT_TYPE_SENIORTUTOR;
 		acc.premiumRemainingDays = 10;
 		acc.premiumLastDay = getTimeNow() + 10 * 86400 + 43200;
-		acc.premiumLastDay = 10;
 		acc.sessionExpires = 99999999;
 		expect(accRepo.save(acc));
 
@@ -168,7 +167,6 @@ int main() {
 		expect(eq(acc2.accountType, AccountType::ACCOUNT_TYPE_SENIORTUTOR));
 		expect(eq(acc2.premiumRemainingDays, 10));
 		expect(eq(acc2.premiumLastDay, acc.premiumLastDay));
-		expect(eq(acc2.premiumLastDay, 10));
 		// sessionExpires is not saved
 		expect(eq(acc2.sessionExpires, 0));
 	});
