@@ -17,10 +17,12 @@ name: Linux build and diagnostics
         - both
         - linux-release
         - linux-debug
+        - linux-debug-cache
+        - linux-release-cache
 permissions:
   contents: read
 concurrency:
-  group: linux-${{ github.ref }}
+  group: linux-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.preset || 'both' }}
   cancel-in-progress: true
 env:
   CMAKE_BUILD_PARALLEL_LEVEL: 2
@@ -72,6 +74,8 @@ jobs:
         if ($baseline -notmatch '^[0-9a-f]{40}$') { throw "Invalid vcpkg baseline" }
         $compiler=(g++-14 -dumpfullversion).Trim()
         "baseline=$baseline" >> $env:GITHUB_OUTPUT
+        $dependencyPreset="${{ matrix.preset }}" -replace "-cache$",""
+        "dependency-preset=$dependencyPreset" >> $env:GITHUB_OUTPUT
         "compiler=$compiler" >> $env:GITHUB_OUTPUT
         @("commit=$env:GITHUB_SHA","runner=$env:ImageOS/$env:ImageVersion","compiler=$compiler","preset=${{ matrix.preset }}") | Set-Content build/diagnostics/environment.txt
         cmake --version >> build/diagnostics/environment.txt
@@ -87,11 +91,11 @@ jobs:
       id: dependencies
       with:
         path: .cache/vcpkg
-        key: deps-v1-${{ runner.os }}-${{ matrix.preset }}-${{ steps.identity.outputs.compiler }}-${{ hashFiles('vcpkg.json', 'CMakePresets.json',
-          'cmake/vcpkg-ports/**') }}
+        key: deps-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-${{ hashFiles('vcpkg.json',
+          'CMakePresets.json', 'cmake/vcpkg-ports/**') }}
         restore-keys: |
-          deps-v1-${{ runner.os }}-${{ matrix.preset }}-${{ steps.identity.outputs.compiler }}-
-          deps-partial-v1-${{ runner.os }}-${{ matrix.preset }}-${{ steps.identity.outputs.compiler }}-
+          deps-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-
+          deps-partial-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-
     - uses: actions/cache/restore@v4
       with:
         path: .cache/downloads
@@ -158,8 +162,8 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: .cache/vcpkg
-        key: deps-partial-v1-${{ runner.os }}-${{ matrix.preset }}-${{ steps.identity.outputs.compiler }}-${{ github.run_id }}-${{ github.run_attempt
-          }}
+        key: deps-partial-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-${{ github.run_id
+          }}-${{ github.run_attempt }}
     - name: Preserve verified source downloads
       if: ${{ !cancelled() && steps.identity.outcome == 'success' && steps.downloads.outputs.cache-hit != 'true' }}
       uses: actions/cache/save@v4
