@@ -19,13 +19,22 @@ name: Linux build and diagnostics
         - linux-debug
         - linux-debug-cache
         - linux-release-cache
+      parallel:
+        description: Parallel compile/link jobs for measured comparison
+        type: choice
+        required: true
+        default: '2'
+        options:
+        - '2'
+        - '4'
 permissions:
   contents: read
 concurrency:
-  group: linux-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.preset || 'both' }}
+  group: linux-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.preset || 'both' }}-${{ github.event_name == 'workflow_dispatch'
+    && inputs.parallel || '2' }}
   cancel-in-progress: true
 env:
-  CMAKE_BUILD_PARALLEL_LEVEL: 2
+  CMAKE_BUILD_PARALLEL_LEVEL: ${{ github.event_name == 'workflow_dispatch' && inputs.parallel || '2' }}
   CC: gcc-14
   CXX: g++-14
   VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.cache/vcpkg,readwrite
@@ -97,6 +106,8 @@ jobs:
         "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $env:GITHUB_ENV
 
         exit 0
+
+        "parallel=$env:CMAKE_BUILD_PARALLEL_LEVEL" >> build/diagnostics/environment.txt
 
         '
       env:
@@ -171,7 +182,7 @@ jobs:
         path: .cache/vcpkg
         key: ${{ steps.dependencies.outputs.cache-primary-key }}
     - name: Compile
-      run: './ci/RunBuildStage.ps1 -Name compile -FilePath cmake -CommandArguments @("--build","build/${{ matrix.preset }}","--parallel","2")
+      run: './ci/RunBuildStage.ps1 -Name compile -FilePath cmake -CommandArguments @("--build","build/${{ matrix.preset }}","--parallel","$env:CMAKE_BUILD_PARALLEL_LEVEL")
 
         '
       env:

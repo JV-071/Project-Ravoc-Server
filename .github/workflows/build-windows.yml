@@ -19,13 +19,22 @@ name: Windows build and diagnostics
         - windows-debug-cache
         - windows-release-cache
         - windows-debug-cache-unity
+      parallel:
+        description: Parallel compile/link jobs for measured comparison
+        type: choice
+        required: true
+        default: '2'
+        options:
+        - '2'
+        - '4'
 permissions:
   contents: read
 concurrency:
-  group: windows-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.preset || 'both' }}
+  group: windows-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.preset || 'both' }}-${{ github.event_name == 'workflow_dispatch'
+    && inputs.parallel || '2' }}
   cancel-in-progress: true
 env:
-  CMAKE_BUILD_PARALLEL_LEVEL: 2
+  CMAKE_BUILD_PARALLEL_LEVEL: ${{ github.event_name == 'workflow_dispatch' && inputs.parallel || '2' }}
   VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.cache/vcpkg,readwrite
   VCPKG_DOWNLOADS: ${{ github.workspace }}/.cache/downloads
   SCCACHE_DIR: ${{ github.workspace }}/.cache/sccache
@@ -59,7 +68,7 @@ jobs:
         \ >> build/diagnostics/environment.txt\ncmake --version >> build/diagnostics/environment.txt\nninja --version >> build/diagnostics/environment.txt\n\
         sccache --version >> build/diagnostics/environment.txt\nsccache --stop-server 2>&1 | Out-Null\n$env:SCCACHE_ERROR_LOG=\"$env:GITHUB_WORKSPACE/build/diagnostics/sccache-errors.log\"\
         \n$env:SCCACHE_LOG=\"warn\"\nsccache --start-server\nif ($LASTEXITCODE -eq 0) {\n  \"CMAKE_C_COMPILER_LAUNCHER=sccache\" >> $env:GITHUB_ENV\n  \"\
-        CMAKE_CXX_COMPILER_LAUNCHER=sccache\" >> $env:GITHUB_ENV\n}\nexit 0\n"
+        CMAKE_CXX_COMPILER_LAUNCHER=sccache\" >> $env:GITHUB_ENV\n}\nexit 0\n\"parallel=$env:CMAKE_BUILD_PARALLEL_LEVEL\" >> build/diagnostics/environment.txt\n"
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
@@ -124,7 +133,7 @@ jobs:
         path: .cache/vcpkg
         key: ${{ steps.dependencies.outputs.cache-primary-key }}
     - name: Compile
-      run: './ci/RunBuildStage.ps1 -Name compile -FilePath cmake -CommandArguments @("--build","build/${{ matrix.preset }}","--parallel","2")
+      run: './ci/RunBuildStage.ps1 -Name compile -FilePath cmake -CommandArguments @("--build","build/${{ matrix.preset }}","--parallel","$env:CMAKE_BUILD_PARALLEL_LEVEL")
 
         '
       env:
