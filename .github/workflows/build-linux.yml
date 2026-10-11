@@ -105,9 +105,11 @@ jobs:
 
         "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $env:GITHUB_ENV
 
-        exit 0
-
         "parallel=$env:CMAKE_BUILD_PARALLEL_LEVEL" >> build/diagnostics/environment.txt
+
+        "processors=$([Environment]::ProcessorCount)" >> build/diagnostics/environment.txt
+
+        exit 0
 
         '
       env:
