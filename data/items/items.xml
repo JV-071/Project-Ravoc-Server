@@ -84846,6 +84846,9 @@
 	<item id="50555" name="stairs">
 		<attribute key="floorchange" value="south" />
 	</item>
+	<item id="50564" article="a" name="ladder">
+		<attribute key="type" value="ladder" />
+	</item>
 	<item id="51119" article="a" name="simple jo staff">
 		<attribute key="primarytype" value="fist weapons" />
 		<attribute key="weaponType" value="fist" />
@@ -86114,6 +86117,14 @@
 		<attribute key="script" value="moveevent;weapon">
 			<attribute key="weaponType" value="distance" />
 		</attribute>
+	</item>
+	<item id="51874" article="a" name="stairs" />
+	<item id="51875" article="a" name="stairs">
+		<attribute key="floorchange" value="north" />
+	</item>
+	<item id="51876" article="a" name="stairs" />
+	<item id="51877" article="a" name="stairs">
+		<attribute key="floorchange" value="west" />
 	</item>
 	<item fromid="51777" toid="51778" article="a" name="sealed door" />
 	<item fromid="51782" toid="51785" article="a" name="glowing sign" />
@@ -88343,6 +88354,10 @@
 			</attribute>
 		</attribute>
 	</item>
+	<item id="53440" article="a" name="stairs" />
+	<item id="53441" article="a" name="stairs">
+		<attribute key="floorchange" value="south" />
+	</item>
 	<!-- Summer Update 15.30 Sky Castle scenery (35 appearances). -->
 	<item fromid="53928" toid="53962" article="a" name="sky castle" />
 	<!-- Summer Update 15.30 Cloud Tile floor (8 appearances). -->
@@ -88453,6 +88468,12 @@
 		<attribute key="primarytype" value="valuables" />
 		<attribute key="description" value="A catalyst used to enhance proficiencies." />
 		<attribute key="weight" value="100" />
+	</item>
+	<item id="54578" article="a" name="stairs">
+		<attribute key="floorchange" value="west" />
+	</item>
+	<item id="54581" article="a" name="stairs">
+		<attribute key="floorchange" value="west" />
 	</item>
 	<item id="54678" article="a" name="dead winged jaracal">
 		<attribute key="containerSize" value="8" />
