@@ -112,6 +112,12 @@ jobs:
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
+    - name: Separate configure probes from compilation cache counters
+      run: "if ($env:CMAKE_CXX_COMPILER_LAUNCHER -eq \"sccache\") {\n  sccache --show-stats | Tee-Object build/diagnostics/configure-cache.txt\n  sccache\
+        \ --zero-stats\n}\n"
+      env:
+        ACTIONS_RUNTIME_TOKEN: ''
+        ACTIONS_RESULTS_URL: ''
     - uses: actions/cache/save@v4
       if: ${{ !cancelled() && steps.configure.outcome == 'success' && steps.dependencies.outputs.cache-hit != 'true' }}
       with:
