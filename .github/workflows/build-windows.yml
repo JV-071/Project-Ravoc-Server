@@ -60,9 +60,13 @@ jobs:
         "dependency-preset=$dependencyPreset" >> $env:GITHUB_OUTPUT
         "compiler=$compiler" >> $env:GITHUB_OUTPUT
         @("commit=$env:GITHUB_SHA","runner=$env:ImageOS/$env:ImageVersion","compiler=$compiler","preset=${{ matrix.preset }}") | Set-Content build/diagnostics/environment.txt
+        "processors=$([Environment]::ProcessorCount)" >> build/diagnostics/environment.txt
         cmake --version >> build/diagnostics/environment.txt
         ninja --version >> build/diagnostics/environment.txt
         sccache --version >> build/diagnostics/environment.txt
+        sccache --stop-server 2>&1 | Out-Null
+        $env:SCCACHE_ERROR_LOG="$env:GITHUB_WORKSPACE/build/diagnostics/sccache-errors.log"
+        $env:SCCACHE_LOG="warn"
         sccache --start-server
         if ($LASTEXITCODE -eq 0) {
           "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $env:GITHUB_ENV

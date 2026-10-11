@@ -409,3 +409,7 @@ cmake-build-*
 /data-global/world/world-editor.otbm
 **/*-before-*.dat
 **/Nova pasta/
+
+# Local CI tools and dependency/compiler caches
+/.tools/
+/.cache/
