@@ -40,7 +40,8 @@ void createAccount(Database &db) {
 void assertAccountLoad(const AccountInfo &acc) {
 	expect(eq(acc.id, 111));
 	expect(eq(acc.accountType, AccountType::ACCOUNT_TYPE_SENIORTUTOR));
-	expect(eq(acc.premiumRemainingDays, 11));
+	// lastday is an expired timestamp; legacy premdays must not grant premium.
+	expect(eq(acc.premiumRemainingDays, 0));
 	expect(eq(acc.premiumLastDay, 1293912));
 	expect(eq(acc.players.size(), 0));
 	expect(eq(acc.oldProtocol, false));
@@ -120,6 +121,7 @@ int main() {
 		AccountInfo acc;
 		accRepo.loadByID(1, acc);
 		acc.premiumRemainingDays = 10;
+		acc.premiumLastDay = getTimeNow() + 10 * 86400 + 43200;
 		accRepo.save(acc);
 
 		accRepo.loadByID(1, acc);
@@ -144,9 +146,7 @@ int main() {
 		std::string password;
 
 		expect(!accRepo.getPassword(891237, password));
-		expect(eq(logger.logs.size(), 1) >> fatal);
-		expect(eq(logger.logs[0].level, std::string { "error" }));
-		expect(eq(logger.logs[0].message, std::string { "Failed to get account:[891237] password!" }));
+        expect(logger.hasLogEntry("error", "Failed to get account:[891237] password!"));
 	});
 
 	test("AccountRepositoryDB::save") = databaseTest(db, [&db] {
@@ -157,6 +157,7 @@ int main() {
 		acc.id = 1;
 		acc.accountType = AccountType::ACCOUNT_TYPE_SENIORTUTOR;
 		acc.premiumRemainingDays = 10;
+		acc.premiumLastDay = getTimeNow() + 10 * 86400 + 43200;
 		acc.premiumLastDay = 10;
 		acc.sessionExpires = 99999999;
 		expect(accRepo.save(acc));
@@ -166,6 +167,7 @@ int main() {
 		expect(eq(acc2.id, 1));
 		expect(eq(acc2.accountType, AccountType::ACCOUNT_TYPE_SENIORTUTOR));
 		expect(eq(acc2.premiumRemainingDays, 10));
+		expect(eq(acc2.premiumLastDay, acc.premiumLastDay));
 		expect(eq(acc2.premiumLastDay, 10));
 		// sessionExpires is not saved
 		expect(eq(acc2.sessionExpires, 0));
