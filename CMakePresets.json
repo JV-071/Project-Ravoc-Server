@@ -148,6 +148,15 @@
         "OPTIONS_ENABLE_CCACHE": "ON",
         "OPTIONS_ENABLE_SCCACHE": "OFF"
       }
+    },
+    {
+      "name": "windows-debug-cache-unity",
+      "inherits": "windows-debug-cache",
+      "displayName": "Windows Debug - cache and unity candidate",
+      "description": "Measured optional candidate; original Debug preset remains unchanged",
+      "cacheVariables": {
+        "SPEED_UP_BUILD_UNITY": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -194,6 +203,10 @@
     {
       "name": "windows-debug",
       "configurePreset": "windows-debug"
+    },
+    {
+      "name": "windows-debug-cache-unity",
+      "configurePreset": "windows-debug-cache-unity"
     }
   ],
   "testPresets": [
@@ -245,6 +258,21 @@
     {
       "name": "linux-release-cache",
       "configurePreset": "linux-release-cache",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      },
+      "filter": {
+        "include": {
+          "name": "^unit$"
+        }
+      }
+    },
+    {
+      "name": "windows-debug-cache-unity",
+      "configurePreset": "windows-debug-cache-unity",
       "output": {
         "outputOnFailure": true
       },
