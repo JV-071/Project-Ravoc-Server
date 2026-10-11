@@ -6,7 +6,17 @@ name: Linux build and diagnostics
     - ci/**
     - validation/linux
   pull_request: null
-  workflow_dispatch: null
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: Build both configurations, or select one for a focused validation
+        type: choice
+        required: true
+        default: both
+        options:
+        - both
+        - linux-release
+        - linux-debug
 permissions:
   contents: read
 concurrency:
@@ -37,9 +47,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        preset:
-        - linux-release
-        - linux-debug
+        preset: ${{ github.event_name == 'workflow_dispatch' && inputs.preset != 'both' && fromJSON(format('["{0}"]', inputs.preset)) || fromJSON('["linux-release",
+          "linux-debug"]') }}
     defaults:
       run:
         shell: pwsh
@@ -80,12 +89,15 @@ jobs:
         path: .cache/vcpkg
         key: deps-v1-${{ runner.os }}-${{ matrix.preset }}-${{ steps.identity.outputs.compiler }}-${{ hashFiles('vcpkg.json', 'CMakePresets.json',
           'cmake/vcpkg-ports/**') }}
-        restore-keys: deps-v1-${{ runner.os }}-${{ matrix.preset }}-${{ steps.identity.outputs.compiler }}-
-    - uses: actions/cache@v4
+        restore-keys: |
+          deps-v1-${{ runner.os }}-${{ matrix.preset }}-${{ steps.identity.outputs.compiler }}-
+          deps-partial-v1-${{ runner.os }}-${{ matrix.preset }}-${{ steps.identity.outputs.compiler }}-
+    - uses: actions/cache/restore@v4
       with:
         path: .cache/downloads
         key: downloads-v1-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
         restore-keys: downloads-v1-${{ runner.os }}-
+      id: downloads
     - uses: actions/cache/restore@v4
       id: compiler
       with:
@@ -141,6 +153,19 @@ jobs:
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
+    - name: Preserve completed dependency packages after a configuration failure
+      if: ${{ !cancelled() && steps.configure.outcome == 'failure' && steps.dependencies.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@v4
+      with:
+        path: .cache/vcpkg
+        key: deps-partial-v1-${{ runner.os }}-${{ matrix.preset }}-${{ steps.identity.outputs.compiler }}-${{ github.run_id }}-${{ github.run_attempt
+          }}
+    - name: Preserve verified source downloads
+      if: ${{ !cancelled() && steps.identity.outcome == 'success' && steps.downloads.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@v4
+      with:
+        path: .cache/downloads
+        key: ${{ steps.downloads.outputs.cache-primary-key }}
     - name: Capture compiler statistics and configuration
       if: always()
       run: |
@@ -150,6 +175,8 @@ jobs:
           $file=Join-Path $folder $name
           if (Test-Path $file) { Copy-Item $file build/diagnostics/ }
         }
+        python ./ci/SummarizeBuild.py $folder build/diagnostics/build-metrics.json
+        if (Test-Path "$folder/.ninja_log") { Copy-Item "$folder/.ninja_log" build/diagnostics/ninja.log }
         exit 0
       env:
         ACTIONS_RUNTIME_TOKEN: ''

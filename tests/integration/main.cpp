@@ -10,16 +10,17 @@
 using namespace boost::ut;
 
 auto databaseTest(Database &db, const std::function<void(void)> &load) {
-	return [&db, load] {
-		db.executeQuery("BEGIN");
-
-		try {
-			load();
-		} catch (...) {
-		}
-
-		db.executeQuery("ROLLBACK");
-	};
+    return [&db, load] {
+        expect(&db == &g_database()) << "Fixture must use the injected database";
+        bool completed = false;
+        DBTransaction::executeWithinTransactionRollbackOnFailure([&] {
+            load();
+            completed = true;
+            // False requests rollback of the connection pinned by DBTransaction.
+            return false;
+        });
+        expect(completed) << "Test callback did not complete inside a transaction";
+    };
 }
 
 void createAccount(Database &db) {
@@ -57,20 +58,29 @@ int main() {
 		uint32_t port = 3306;
 		std::string sock;
     };
-	Database db{};
-	DbConfig dbConfig{};
+    di::extension::injector<> injector {};
+    InMemoryLogger::install(injector);
+    injector.install(di::bind<Database>.to<Database>().in(di::singleton));
+    DI::setTestContainer(&injector);
+    struct ResetTestContainer {
+        ~ResetTestContainer() { DI::setTestContainer(nullptr); }
+    } resetTestContainer;
+    auto &db = g_database();
+    DbConfig dbConfig{};
 
-	db.connect(
+	if (!db.connect(
 		&dbConfig.host,
 		&dbConfig.user,
 		&dbConfig.password,
 		&dbConfig.database,
 		dbConfig.port,
 		&dbConfig.sock
-	);
+	)) {
+        return 1;
+    }
 
 	test("AccountRepositoryDB::loadByID") = databaseTest(db, [&db] {
-		InMemoryLogger logger{};
+		auto &logger = dynamic_cast<InMemoryLogger &>(g_logger()).reset();
 		AccountRepositoryDB accRepo{};
 		createAccount(db);
 
@@ -81,7 +91,7 @@ int main() {
 	});
 
 	test("AccountRepositoryDB::loadByEmailOrName") = databaseTest(db, [&db] {
-		InMemoryLogger logger {};
+		auto &logger = dynamic_cast<InMemoryLogger &>(g_logger()).reset();
 		AccountRepositoryDB accRepo {};
 		createAccount(db);
 
@@ -92,7 +102,7 @@ int main() {
 	});
 
 	test("AccountRepositoryDB::loadBySession") = databaseTest(db, [&db] {
-		InMemoryLogger logger {};
+		auto &logger = dynamic_cast<InMemoryLogger &>(g_logger()).reset();
 		AccountRepositoryDB accRepo {};
 		createAccount(db);
 
@@ -104,7 +114,7 @@ int main() {
 	});
 
 	test("AccountRepositoryDB load sets premium day purchased = remaining days, if needed") = databaseTest(db, [&db] {
-		InMemoryLogger logger{};
+		auto &logger = dynamic_cast<InMemoryLogger &>(g_logger()).reset();
 		AccountRepositoryDB accRepo{};
 
 		AccountInfo acc;
@@ -118,7 +128,7 @@ int main() {
 	});
 
 	test("AccountRepositoryDB::getPassword") = databaseTest(db, [&db] {
-		InMemoryLogger logger {};
+		auto &logger = dynamic_cast<InMemoryLogger &>(g_logger()).reset();
 		AccountRepositoryDB accRepo {};
 
 		std::string password;
@@ -128,7 +138,7 @@ int main() {
 	});
 
 	test("AccountRepositoryDB::getPassword logs on failure") = databaseTest(db, [&db] {
-		InMemoryLogger logger {};
+		auto &logger = dynamic_cast<InMemoryLogger &>(g_logger()).reset();
 		AccountRepositoryDB accRepo {};
 
 		std::string password;
@@ -140,7 +150,7 @@ int main() {
 	});
 
 	test("AccountRepositoryDB::save") = databaseTest(db, [&db] {
-		InMemoryLogger logger {};
+		auto &logger = dynamic_cast<InMemoryLogger &>(g_logger()).reset();
 		AccountRepositoryDB accRepo {};
 
 		AccountInfo acc;
@@ -160,4 +170,13 @@ int main() {
 		// sessionExpires is not saved
 		expect(eq(acc2.sessionExpires, 0));
 	});
+    test("Database integration fixture rolls back rows with a connection pool") = [&db] {
+        databaseTest(db, [&db] { createAccount(db); })();
+        const auto result = db.storeQuery("SELECT COUNT(*) AS row_count FROM accounts WHERE id = 111");
+        expect(result != nullptr) << "Rollback verification query must succeed";
+        if (result) {
+            expect(eq(result->getNumber<uint32_t>("row_count"), uint32_t{0}));
+        }
+    };
+
 }
