@@ -21,3 +21,7 @@ Each build stage records exit status, elapsed wall time and complete output. Art
 Lua syntax checks compile tracked scripts with LuaJIT without executing game code. Legacy workflows remain as `.reference` files; automatic release replacement and formatter commits are disabled.
 
 Local test presets run unit tests only; database integration tests require a separate disposable database. The missing schema was restored from the exact credited original server base, with provenance in `ci/schema-provenance.json`.
+
+CI uses the measured profiles shown in the workflows and four parallel jobs. Original presets remain available. On Windows the client keeps PCH for Debug; server Debug has an opt-in unity/cache profile. Release production keeps LTO; fast test profiles use a separate non-LTO core. Client cache profiles collect existing test modules into one executable, while CTest still launches each named case separately.
+
+A separate trusted cache-retention workflow runs without checking out repository code. It retains two compiler snapshots and one complete dependency snapshot per namespace/ref, preventing repeated snapshots from evicting dependency caches. CMake probe counters are recorded separately from source compilation.

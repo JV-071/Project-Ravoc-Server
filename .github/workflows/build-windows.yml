@@ -23,7 +23,7 @@ name: Windows build and diagnostics
         description: Parallel compile/link jobs for measured comparison
         type: choice
         required: true
-        default: '2'
+        default: '4'
         options:
         - '2'
         - '4'
@@ -31,10 +31,10 @@ permissions:
   contents: read
 concurrency:
   group: windows-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.preset || 'both' }}-${{ github.event_name == 'workflow_dispatch'
-    && inputs.parallel || '2' }}
+    && inputs.parallel || '4' }}
   cancel-in-progress: true
 env:
-  CMAKE_BUILD_PARALLEL_LEVEL: ${{ github.event_name == 'workflow_dispatch' && inputs.parallel || '2' }}
+  CMAKE_BUILD_PARALLEL_LEVEL: ${{ github.event_name == 'workflow_dispatch' && inputs.parallel || '4' }}
   VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.cache/vcpkg,readwrite
   VCPKG_DOWNLOADS: ${{ github.workspace }}/.cache/downloads
   SCCACHE_DIR: ${{ github.workspace }}/.cache/sccache
@@ -46,8 +46,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        preset: ${{ github.event_name == 'workflow_dispatch' && inputs.preset != 'both' && fromJSON(format('["{0}"]', inputs.preset)) || fromJSON('["windows-release",
-          "windows-debug"]') }}
+        preset: ${{ github.event_name == 'workflow_dispatch' && inputs.preset != 'both' && fromJSON(format('["{0}"]', inputs.preset)) || fromJSON('["windows-release-cache",
+          "windows-debug-cache-unity"]') }}
     defaults:
       run:
         shell: pwsh
