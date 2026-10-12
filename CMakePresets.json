@@ -115,7 +115,8 @@
       "displayName": "Windows Debug - compiler cache",
       "description": "Disable PCH so compiler objects can be cached; preserve production optimization and runtime settings",
       "cacheVariables": {
-        "USE_PRECOMPILED_HEADER": "OFF"
+        "USE_PRECOMPILED_HEADER": "OFF",
+        "ENABLE_TEST_LTO": "OFF"
       }
     },
     {
@@ -124,7 +125,8 @@
       "displayName": "Windows Release - compiler cache",
       "description": "Disable PCH so compiler objects can be cached; preserve production optimization and runtime settings",
       "cacheVariables": {
-        "USE_PRECOMPILED_HEADER": "OFF"
+        "USE_PRECOMPILED_HEADER": "OFF",
+        "ENABLE_TEST_LTO": "OFF"
       }
     },
     {
@@ -135,7 +137,8 @@
       "cacheVariables": {
         "USE_PRECOMPILED_HEADER": "OFF",
         "OPTIONS_ENABLE_CCACHE": "ON",
-        "OPTIONS_ENABLE_SCCACHE": "OFF"
+        "OPTIONS_ENABLE_SCCACHE": "OFF",
+        "ENABLE_TEST_LTO": "OFF"
       }
     },
     {
@@ -146,7 +149,8 @@
       "cacheVariables": {
         "USE_PRECOMPILED_HEADER": "OFF",
         "OPTIONS_ENABLE_CCACHE": "ON",
-        "OPTIONS_ENABLE_SCCACHE": "OFF"
+        "OPTIONS_ENABLE_SCCACHE": "OFF",
+        "ENABLE_TEST_LTO": "OFF"
       }
     },
     {
@@ -155,7 +159,8 @@
       "displayName": "Windows Debug - cache and unity candidate",
       "description": "Measured optional candidate; original Debug preset remains unchanged",
       "cacheVariables": {
-        "SPEED_UP_BUILD_UNITY": "ON"
+        "SPEED_UP_BUILD_UNITY": "ON",
+        "ENABLE_TEST_LTO": "OFF"
       }
     }
   ],
