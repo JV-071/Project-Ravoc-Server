@@ -77,41 +77,24 @@ jobs:
     - uses: lukka/get-cmake@v3.31.6
     - name: Environment and dependency identity
       id: identity
-      run: 'New-Item -ItemType Directory -Force build/diagnostics,.cache/vcpkg,.cache/downloads | Out-Null
-
-        $baseline=(Get-Content vcpkg.json -Raw | ConvertFrom-Json).''builtin-baseline''
-
-        if ($baseline -notmatch ''^[0-9a-f]{40}$'') { throw "Invalid vcpkg baseline" }
-
+      run: |
+        New-Item -ItemType Directory -Force build/diagnostics,.cache/vcpkg,.cache/downloads | Out-Null
+        $baseline=(Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
+        if ($baseline -notmatch '^[0-9a-f]{40}$') { throw "Invalid vcpkg baseline" }
         $compiler=(g++-14 -dumpfullversion).Trim()
-
         "baseline=$baseline" >> $env:GITHUB_OUTPUT
-
         $dependencyPreset="${{ matrix.preset }}" -replace "-cache$",""
-
         "dependency-preset=$dependencyPreset" >> $env:GITHUB_OUTPUT
-
         "compiler=$compiler" >> $env:GITHUB_OUTPUT
-
         @("commit=$env:GITHUB_SHA","runner=$env:ImageOS/$env:ImageVersion","compiler=$compiler","preset=${{ matrix.preset }}") | Set-Content build/diagnostics/environment.txt
-
         cmake --version >> build/diagnostics/environment.txt
-
         ninja --version >> build/diagnostics/environment.txt
-
         ccache --version >> build/diagnostics/environment.txt
-
         "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $env:GITHUB_ENV
-
         "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $env:GITHUB_ENV
-
         "parallel=$env:CMAKE_BUILD_PARALLEL_LEVEL" >> build/diagnostics/environment.txt
-
         "processors=$([Environment]::ProcessorCount)" >> build/diagnostics/environment.txt
-
         exit 0
-
-        '
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
@@ -121,11 +104,9 @@ jobs:
         path: .cache/vcpkg
         key: deps-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-${{ hashFiles('vcpkg.json',
           'CMakePresets.json', 'cmake/vcpkg-ports/**') }}
-        restore-keys: 'deps-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-
-
+        restore-keys: |
+          deps-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-
           deps-partial-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-
-
-          '
     - uses: actions/cache/restore@v4
       with:
         path: .cache/downloads
@@ -151,30 +132,24 @@ jobs:
         persist-credentials: false
         fetch-depth: 0
     - name: Bootstrap vcpkg
-      run: '& bash .tools/vcpkg/bootstrap-vcpkg.sh -disableMetrics
-
+      run: |
+        & bash .tools/vcpkg/bootstrap-vcpkg.sh -disableMetrics
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
         "VCPKG_ROOT=$env:GITHUB_WORKSPACE/.tools/vcpkg" >> $env:GITHUB_ENV
-
-        '
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
     - name: Configure
       id: configure
-      run: './ci/RunBuildStage.ps1 -Name configure -FilePath cmake -CommandArguments @("--preset","${{ matrix.preset }}","-DBUILD_TESTS=ON","-DTOGGLE_BIN_FOLDER=ON","-DOPTIONS_ENABLE_SCCACHE=OFF","-DOPTIONS_ENABLE_CCACHE=OFF")
-
-        '
+      run: |
+        ./ci/RunBuildStage.ps1 -Name configure -FilePath cmake -CommandArguments @("--preset","${{ matrix.preset }}","-DBUILD_TESTS=ON","-DTOGGLE_BIN_FOLDER=ON","-DOPTIONS_ENABLE_SCCACHE=OFF","-DOPTIONS_ENABLE_CCACHE=OFF")
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
     - name: Separate configure probes from compilation cache counters
-      run: 'ccache --show-stats | Tee-Object build/diagnostics/configure-cache.txt
-
+      run: |
+        ccache --show-stats | Tee-Object build/diagnostics/configure-cache.txt
         ccache --zero-stats
-
-        '
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
@@ -184,9 +159,8 @@ jobs:
         path: .cache/vcpkg
         key: ${{ steps.dependencies.outputs.cache-primary-key }}
     - name: Compile
-      run: './ci/RunBuildStage.ps1 -Name compile -FilePath cmake -CommandArguments @("--build","build/${{ matrix.preset }}","--parallel","$env:CMAKE_BUILD_PARALLEL_LEVEL")
-
-        '
+      run: |
+        ./ci/RunBuildStage.ps1 -Name compile -FilePath cmake -CommandArguments @("--build","build/${{ matrix.preset }}","--parallel","$env:CMAKE_BUILD_PARALLEL_LEVEL")
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
@@ -196,15 +170,12 @@ jobs:
         MYSQL_PWD: root
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
-      run: 'set -euo pipefail
-
+      run: |
+        set -euo pipefail
         mysql --protocol=TCP --host=127.0.0.1 --port=3306 --user=root crystalserver < schema.sql > build/diagnostics/database-schema.log 2>&1
-
-        '
     - name: Unit tests
-      run: './ci/RunBuildStage.ps1 -Name tests -FilePath ctest -CommandArguments @("--test-dir","build/${{ matrix.preset }}/tests","--output-on-failure","--no-tests=error","--timeout","120","--output-junit","$env:GITHUB_WORKSPACE/build/diagnostics/tests.xml")
-
-        '
+      run: |
+        ./ci/RunBuildStage.ps1 -Name tests -FilePath ctest -CommandArguments @("--test-dir","build/${{ matrix.preset }}/tests","--output-on-failure","--no-tests=error","--timeout","120","--output-junit","$env:GITHUB_WORKSPACE/build/diagnostics/tests.xml")
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
@@ -223,10 +194,16 @@ jobs:
         key: ${{ steps.downloads.outputs.cache-primary-key }}
     - name: Capture compiler statistics and configuration
       if: always()
-      run: "ccache --show-stats | Tee-Object build/diagnostics/compiler-cache.txt\n$folder=\"build/${{ matrix.preset }}\"\nforeach ($name in @(\"CMakeCache.txt\"\
-        ,\"vcpkg-manifest-install.log\",\"CMakeFiles/CMakeConfigureLog.yaml\")) {\n  $file=Join-Path $folder $name\n  if (Test-Path $file) { Copy-Item $file\
-        \ build/diagnostics/ }\n}\npython ./ci/SummarizeBuild.py $folder build/diagnostics/build-metrics.json\nif (Test-Path \"$folder/.ninja_log\") { Copy-Item\
-        \ \"$folder/.ninja_log\" build/diagnostics/ninja.log }\nexit 0\n"
+      run: |
+        ccache --show-stats | Tee-Object build/diagnostics/compiler-cache.txt
+        $folder="build/${{ matrix.preset }}"
+        foreach ($name in @("CMakeCache.txt","vcpkg-manifest-install.log","CMakeFiles/CMakeConfigureLog.yaml","build.ninja","compile_commands.json")) {
+          $file=Join-Path $folder $name
+          if (Test-Path $file) { Copy-Item $file build/diagnostics/ }
+        }
+        python ./ci/SummarizeBuild.py $folder build/diagnostics/build-metrics.json
+        if (Test-Path "$folder/.ninja_log") { Copy-Item "$folder/.ninja_log" build/diagnostics/ninja.log }
+        exit 0
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
@@ -244,8 +221,7 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: binaries-${{ matrix.preset }}
-        path: 'build/${{ matrix.preset }}/bin/
-
-          '
+        path: |
+          build/${{ matrix.preset }}/bin/
         if-no-files-found: error
         retention-days: 14

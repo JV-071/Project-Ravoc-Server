@@ -60,16 +60,30 @@ jobs:
     - uses: mozilla-actions/sccache-action@v0.0.9
     - name: Environment and dependency identity
       id: identity
-      run: "New-Item -ItemType Directory -Force build/diagnostics,.cache/vcpkg,.cache/downloads | Out-Null\n$baseline=(Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'\n\
-        if ($baseline -notmatch '^[0-9a-f]{40}$') { throw \"Invalid vcpkg baseline\" }\n$compiler=(Get-Item (Get-Command cl.exe).Source).VersionInfo.FileVersion\n\
-        \"baseline=$baseline\" >> $env:GITHUB_OUTPUT\n$dependencyPreset=\"${{ matrix.preset }}\" -replace \"-unity$\",\"\" -replace \"-cache$\",\"\"\n\"\
-        dependency-preset=$dependencyPreset\" >> $env:GITHUB_OUTPUT\n\"compiler=$compiler\" >> $env:GITHUB_OUTPUT\n@(\"commit=$env:GITHUB_SHA\",\"runner=$env:ImageOS/$env:ImageVersion\"\
-        ,\"compiler=$compiler\",\"preset=${{ matrix.preset }}\") | Set-Content build/diagnostics/environment.txt\n\"processors=$([Environment]::ProcessorCount)\"\
-        \ >> build/diagnostics/environment.txt\ncmake --version >> build/diagnostics/environment.txt\nninja --version >> build/diagnostics/environment.txt\n\
-        sccache --version >> build/diagnostics/environment.txt\nsccache --stop-server 2>&1 | Out-Null\n$env:SCCACHE_ERROR_LOG=\"$env:GITHUB_WORKSPACE/build/diagnostics/sccache-errors.log\"\
-        \n$env:SCCACHE_LOG=\"warn\"\nsccache --start-server\nif ($LASTEXITCODE -eq 0) {\n  \"CMAKE_C_COMPILER_LAUNCHER=sccache\" >> $env:GITHUB_ENV\n  \"\
-        CMAKE_CXX_COMPILER_LAUNCHER=sccache\" >> $env:GITHUB_ENV\n}\n\"parallel=$env:CMAKE_BUILD_PARALLEL_LEVEL\" >> build/diagnostics/environment.txt\n\
-        exit 0\n"
+      run: |
+        New-Item -ItemType Directory -Force build/diagnostics,.cache/vcpkg,.cache/downloads | Out-Null
+        $baseline=(Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
+        if ($baseline -notmatch '^[0-9a-f]{40}$') { throw "Invalid vcpkg baseline" }
+        $compiler=(Get-Item (Get-Command cl.exe).Source).VersionInfo.FileVersion
+        "baseline=$baseline" >> $env:GITHUB_OUTPUT
+        $dependencyPreset="${{ matrix.preset }}" -replace "-unity$","" -replace "-cache$",""
+        "dependency-preset=$dependencyPreset" >> $env:GITHUB_OUTPUT
+        "compiler=$compiler" >> $env:GITHUB_OUTPUT
+        @("commit=$env:GITHUB_SHA","runner=$env:ImageOS/$env:ImageVersion","compiler=$compiler","preset=${{ matrix.preset }}") | Set-Content build/diagnostics/environment.txt
+        "processors=$([Environment]::ProcessorCount)" >> build/diagnostics/environment.txt
+        cmake --version >> build/diagnostics/environment.txt
+        ninja --version >> build/diagnostics/environment.txt
+        sccache --version >> build/diagnostics/environment.txt
+        sccache --stop-server 2>&1 | Out-Null
+        $env:SCCACHE_ERROR_LOG="$env:GITHUB_WORKSPACE/build/diagnostics/sccache-errors.log"
+        $env:SCCACHE_LOG="warn"
+        sccache --start-server
+        if ($LASTEXITCODE -eq 0) {
+          "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $env:GITHUB_ENV
+          "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $env:GITHUB_ENV
+        }
+        "parallel=$env:CMAKE_BUILD_PARALLEL_LEVEL" >> build/diagnostics/environment.txt
+        exit 0
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
@@ -79,11 +93,9 @@ jobs:
         path: .cache/vcpkg
         key: deps-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-${{ hashFiles('vcpkg.json',
           'CMakePresets.json', 'cmake/vcpkg-ports/**') }}
-        restore-keys: 'deps-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-
-
+        restore-keys: |
+          deps-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-
           deps-partial-v1-${{ runner.os }}-${{ steps.identity.outputs.dependency-preset }}-${{ steps.identity.outputs.compiler }}-
-
-          '
     - uses: actions/cache/restore@v4
       with:
         path: .cache/downloads
@@ -104,27 +116,26 @@ jobs:
         persist-credentials: false
         fetch-depth: 0
     - name: Bootstrap vcpkg
-      run: '& .tools/vcpkg/bootstrap-vcpkg.bat -disableMetrics
-
+      run: |
+        & .tools/vcpkg/bootstrap-vcpkg.bat -disableMetrics
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
         "VCPKG_ROOT=$env:GITHUB_WORKSPACE/.tools/vcpkg" >> $env:GITHUB_ENV
-
-        '
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
     - name: Configure
       id: configure
-      run: './ci/RunBuildStage.ps1 -Name configure -FilePath cmake -CommandArguments @("--preset","${{ matrix.preset }}","-DBUILD_TESTS=ON","-DTOGGLE_BIN_FOLDER=ON","-DOPTIONS_ENABLE_SCCACHE=OFF")
-
-        '
+      run: |
+        ./ci/RunBuildStage.ps1 -Name configure -FilePath cmake -CommandArguments @("--preset","${{ matrix.preset }}","-DBUILD_TESTS=ON","-DTOGGLE_BIN_FOLDER=ON","-DOPTIONS_ENABLE_SCCACHE=OFF")
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
     - name: Separate configure probes from compilation cache counters
-      run: "if ($env:CMAKE_CXX_COMPILER_LAUNCHER -eq \"sccache\") {\n  sccache --show-stats | Tee-Object build/diagnostics/configure-cache.txt\n  sccache\
-        \ --zero-stats\n}\n"
+      run: |
+        if ($env:CMAKE_CXX_COMPILER_LAUNCHER -eq "sccache") {
+          sccache --show-stats | Tee-Object build/diagnostics/configure-cache.txt
+          sccache --zero-stats
+        }
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
@@ -134,16 +145,14 @@ jobs:
         path: .cache/vcpkg
         key: ${{ steps.dependencies.outputs.cache-primary-key }}
     - name: Compile
-      run: './ci/RunBuildStage.ps1 -Name compile -FilePath cmake -CommandArguments @("--build","build/${{ matrix.preset }}","--parallel","$env:CMAKE_BUILD_PARALLEL_LEVEL")
-
-        '
+      run: |
+        ./ci/RunBuildStage.ps1 -Name compile -FilePath cmake -CommandArguments @("--build","build/${{ matrix.preset }}","--parallel","$env:CMAKE_BUILD_PARALLEL_LEVEL")
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
     - name: Unit tests
-      run: './ci/RunBuildStage.ps1 -Name tests -FilePath ctest -CommandArguments @("--test-dir","build/${{ matrix.preset }}/tests","--output-on-failure","--no-tests=error","--timeout","120","--output-junit","$env:GITHUB_WORKSPACE/build/diagnostics/tests.xml","-R","^unit$")
-
-        '
+      run: |
+        ./ci/RunBuildStage.ps1 -Name tests -FilePath ctest -CommandArguments @("--test-dir","build/${{ matrix.preset }}/tests","--output-on-failure","--no-tests=error","--timeout","120","--output-junit","$env:GITHUB_WORKSPACE/build/diagnostics/tests.xml","-R","^unit$")
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
@@ -162,10 +171,17 @@ jobs:
         key: ${{ steps.downloads.outputs.cache-primary-key }}
     - name: Capture compiler statistics and configuration
       if: always()
-      run: "sccache --show-stats | Tee-Object build/diagnostics/compiler-cache.txt\nsccache --stop-server\n$folder=\"build/${{ matrix.preset }}\"\nforeach\
-        \ ($name in @(\"CMakeCache.txt\",\"vcpkg-manifest-install.log\",\"CMakeFiles/CMakeConfigureLog.yaml\")) {\n  $file=Join-Path $folder $name\n  if\
-        \ (Test-Path $file) { Copy-Item $file build/diagnostics/ }\n}\npython ./ci/SummarizeBuild.py $folder build/diagnostics/build-metrics.json\nif (Test-Path\
-        \ \"$folder/.ninja_log\") { Copy-Item \"$folder/.ninja_log\" build/diagnostics/ninja.log }\nexit 0\n"
+      run: |
+        sccache --show-stats | Tee-Object build/diagnostics/compiler-cache.txt
+        sccache --stop-server
+        $folder="build/${{ matrix.preset }}"
+        foreach ($name in @("CMakeCache.txt","vcpkg-manifest-install.log","CMakeFiles/CMakeConfigureLog.yaml","build.ninja","compile_commands.json")) {
+          $file=Join-Path $folder $name
+          if (Test-Path $file) { Copy-Item $file build/diagnostics/ }
+        }
+        python ./ci/SummarizeBuild.py $folder build/diagnostics/build-metrics.json
+        if (Test-Path "$folder/.ninja_log") { Copy-Item "$folder/.ninja_log" build/diagnostics/ninja.log }
+        exit 0
       env:
         ACTIONS_RUNTIME_TOKEN: ''
         ACTIONS_RESULTS_URL: ''
@@ -183,12 +199,9 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: binaries-${{ matrix.preset }}
-        path: 'build/${{ matrix.preset }}/bin/*.exe
-
+        path: |
+          build/${{ matrix.preset }}/bin/*.exe
           build/${{ matrix.preset }}/bin/*.dll
-
           build/${{ matrix.preset }}/bin/*.pdb
-
-          '
         if-no-files-found: error
         retention-days: 14
